@@ -1,5 +1,5 @@
 import React from 'react';
-import { HStack } from '@chakra-ui/react';
+import { Stack } from '@chakra-ui/react';
 import { Button } from '../atoms';
 
 export interface ControlButtonsProps {
@@ -24,13 +24,21 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
   }
 
   return (
-    <HStack spacing={4} flexWrap="wrap" justify="center">
+    <Stack 
+      direction={{ base: 'column', md: 'row' }} 
+      spacing={4} 
+      align="center"
+      justify="center"
+      w="full"
+    >
       <Button
         variant="success"
         size="lg"
         onClick={onStartUpload}
         disabled={disabled || isUploading}
         aria-label="Start uploading all files"
+        w={{ base: 'full', md: 'auto' }}
+        maxW={{ base: '280px', md: 'none' }}
       >
         Start Upload
       </Button>
@@ -41,6 +49,8 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         onClick={onPauseUpload}
         disabled={disabled || !isUploading}
         aria-label={isUploading ? 'Pause upload' : 'Resume upload'}
+        w={{ base: 'full', md: 'auto' }}
+        maxW={{ base: '280px', md: 'none' }}
       >
         {isUploading ? 'Pause' : 'Resume'}
       </Button>
@@ -51,10 +61,12 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         onClick={onClearAll}
         disabled={disabled || isUploading}
         aria-label="Clear all files from upload queue"
+        w={{ base: 'full', md: 'auto' }}
+        maxW={{ base: '280px', md: 'none' }}
       >
         Clear All
       </Button>
-    </HStack>
+    </Stack>
   );
 };
 
