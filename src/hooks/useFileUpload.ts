@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Uppy, { UppyFile, UploadResult } from '@uppy/core';
-import Tus from '@uppy/tus';
+import Tus, { TusDetailedError } from '@uppy/tus';
 import { useUppyState } from '@uppy/react';
 import { extractRootDirectory, generateFileId, isValidFileDepth } from '../utils/formatters';
 
@@ -85,10 +85,21 @@ export const useFileUpload = (config: UseFileUploadConfig = {}): UseFileUploadRe
       chunkSize: 6 * 1024 * 1024, // 6MB chunks for better performance
       allowedMetaFields: ['bucketName', 'objectName', 'contentType', 'cacheControl', 'originalFilename', 'rootDirectory'],
       limit: maxConcurrentUploads,
-      retryDelays: [0, 1000], // Retry delays for failed uploads
+      retryDelays: [500, 1000], // Retry delays for failed uploads
       onError: function (error) {
         console.error('Upload failed:', error);
       },
+      onShouldRetry: (err: TusDetailedError, retryAttempt: number)=>{
+        if(retryAttempt > 2){
+            // if this attenpt is 3 and above do not proceed
+            return false
+        }
+        if((err.originalResponse?.getStatus()||0) >= 500 && (err.originalResponse?.getStatus()||0)< 600){
+            console.log(`Retrying upload due to server error (attempt ${retryAttempt + 1})`)
+            return true
+        }
+        return false
+      }
     });
 
     return () => {
