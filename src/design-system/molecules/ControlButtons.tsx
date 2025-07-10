@@ -49,7 +49,7 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
         variant="danger"
         size="lg"
         onClick={onClearAll}
-        disabled={disabled}
+        disabled={disabled || isUploading}
         aria-label="Clear all files from upload queue"
       >
         Clear All
