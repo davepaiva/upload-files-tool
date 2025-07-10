@@ -100,8 +100,6 @@ src/
 └── utils/              # Utility functions
 ```
 
-## File Upload Flow
-
 
 
 
