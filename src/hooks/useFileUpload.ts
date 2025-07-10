@@ -1,8 +1,23 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useToast } from '@chakra-ui/react';
-import Uppy from '@uppy/core';
-import XHRUpload from '@uppy/xhr-upload';
+import Uppy, { UppyFile, UploadResult } from '@uppy/core';
+import Tus from '@uppy/tus';
+import { useUppyState } from '@uppy/react';
 import { extractRootDirectory, generateFileId, isValidFileDepth } from '../utils/formatters';
+
+interface UppyError {
+  message: string;
+  details?: string;
+}
+
+interface UploadResponse {
+  body?: Record<string, never>;
+  status: number;
+  bytesUploaded?: number;
+  uploadURL?: string;
+}
+
+const supabaseStorageURL = `https://${process.env.REACT_APP_SUPABASE_PROJECT_ID}.supabase.co/storage/v1/upload/resumable`;
 
 export interface FileUploadItem {
   id: string;
@@ -31,7 +46,6 @@ export interface UseFileUploadReturn {
 }
 
 export const useFileUpload = (): UseFileUploadReturn => {
-  const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const liveRegionRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
@@ -46,63 +60,113 @@ export const useFileUpload = (): UseFileUploadReturn => {
       },
       autoProceed: false,
     })
-    .use(XHRUpload, {
-      endpoint: '/api/upload',
-      fieldName: 'file',
-      limit: 3,
-      bundle: false,
-      formData: true,
+    .use(Tus, {
+      endpoint: supabaseStorageURL,
+      headers: {
+        authorization: `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+        apikey: process.env.REACT_APP_SUPABASE_ANON_KEY || "",
+      },
+      uploadDataDuringCreation: true,
+      chunkSize: 6 * 1024 * 1024, // 6MB chunks for better performance
+      allowedMetaFields: ['bucketName', 'objectName', 'contentType', 'cacheControl'],
+      limit: 3, // Max 3 concurrent uploads
+      retryDelays: [0, 1000], // Retry delays for failed uploads
+      onError: function (error) {
+        console.error('Upload failed:', error);
+      },
     })
   );
 
+  // Use Uppy's state directly
+  const uppyFiles = useUppyState(uppy, (state) => state.files);
+  const totalProgress = useUppyState(uppy, (state) => state.totalProgress);
+
+  // Convert Uppy files to FileUploadItem format
+  const files = useMemo(() => {
+    return Object.values(uppyFiles).map((uppyFile): FileUploadItem => {
+      const meta = uppyFile.meta as any;
+      const relativePath = meta?.relativePath || uppyFile.name;
+      
+      // Determine status based on Uppy's file state
+      let status: FileUploadItem['status'] = 'queued';
+      if (uppyFile.progress?.uploadComplete) {
+        status = 'done';
+      } else if (uppyFile.progress?.uploadStarted) {
+        status = 'uploading';
+      } else if (uppyFile.error) {
+        status = 'error';
+      }
+
+      return {
+        id: uppyFile.id,
+        name: uppyFile.name || 'Unknown',
+        size: uppyFile.size || 0,
+        relativePath,
+        progress: Math.round(uppyFile.progress?.percentage || 0),
+        status,
+        error: uppyFile.error ? String(uppyFile.error) : undefined,
+      };
+    });
+  }, [uppyFiles]);
+
   // Set up Uppy event listeners
   useEffect(() => {
-    const onUploadProgress = (file: any, progress: any) => {
+    const onFileAdded = (file: UppyFile<{ type: string; }, Record<string, never>>) => {
+      // Set Supabase metadata for the file
+      const relativePath = (file.meta as any)?.relativePath || file.name;
+      const rootDirectory = (file.meta as any)?.rootDirectory || '';
+      const objectName = rootDirectory ? `${rootDirectory}/${relativePath}` : relativePath;
+      
+      const supabaseMetadata = {
+        bucketName: process.env.REACT_APP_SUPABASE_STORAGE_BUCKET,
+        objectName: objectName,
+        contentType: file.type || 'application/octet-stream',
+        cacheControl: '3600',
+      };
+
+      file.meta = {
+        ...file.meta,
+        ...supabaseMetadata,
+      };
+
+      console.log('File added with metadata:', file);
+    };
+
+    const onUploadSuccess = (file: UppyFile<{ type: string; }, Record<string, never>> | undefined, response: UploadResponse) => {
       if (file?.id) {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id 
-            ? { ...f, progress: progress.percentage || 0, status: 'uploading' as const }
-            : f
-        ));
+        // Announce success to screen readers
+        const fileName = file.name || 'File';
+        announceToScreenReader(`${fileName} uploaded successfully`);
       }
     };
 
-    const onUploadSuccess = (file: any) => {
+    const onUploadError = (file: UppyFile<{ type: string; }, Record<string, never>> | undefined, error: UppyError) => {
       if (file?.id) {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id 
-            ? { ...f, progress: 100, status: 'done' as const }
-            : f
-        ));
-      }
-    };
-
-    const onUploadError = (file: any, error: any) => {
-      if (file?.id) {
-        setFiles(prev => prev.map(f => 
-          f.id === file.id 
-            ? { ...f, status: 'error' as const, error: error.message }
-            : f
-        ));
+        // Announce error to screen readers
+        const fileName = file?.name || 'File';
+        announceToScreenReader(`${fileName} upload failed: ${error.message || 'Unknown error'}`);
       }
     };
 
     const onUpload = () => {
       setIsUploading(true);
+      console.log('Upload batch started');
     };
 
-    const onComplete = () => {
+    const onComplete = (result: UploadResult<{ type: string; }, Record<string, never>>) => {
       setIsUploading(false);
+      console.log('Upload complete! Successful files:', result.successful);
+      console.log('Failed files:', result.failed);
     };
 
-    uppy.on('upload-progress', onUploadProgress);
+    uppy.on('file-added', onFileAdded);
     uppy.on('upload-success', onUploadSuccess);
     uppy.on('upload-error', onUploadError);
     uppy.on('upload', onUpload);
     uppy.on('complete', onComplete);
 
     return () => {
-      uppy.off('upload-progress', onUploadProgress);
+      uppy.off('file-added', onFileAdded);
       uppy.off('upload-success', onUploadSuccess);
       uppy.off('upload-error', onUploadError);
       uppy.off('upload', onUpload);
@@ -126,25 +190,14 @@ export const useFileUpload = (): UseFileUploadReturn => {
         })
       : selectedFiles;
 
-    // Create file upload items
-    const fileItems: FileUploadItem[] = validFiles.map(file => ({
-      id: generateFileId(file.name, file.size),
-      name: file.name,
-      size: file.size,
-      relativePath: file.webkitRelativePath || file.name,
-      progress: 0,
-      status: 'queued' as const,
-    }));
-
-    // Add files to local state
-    setFiles(prev => [...prev, ...fileItems]);
-
-    // Add files to Uppy
-    validFiles.forEach(file => {
+    // Add files to Uppy with metadata
+    validFiles.forEach((file) => {
       const relativePath = file.webkitRelativePath || file.name;
       const rootDirectory = extractRootDirectory(relativePath);
+      const fileId = generateFileId(file.name, file.size);
       
       uppy.addFile({
+        id: fileId,
         name: file.name,
         type: file.type,
         data: file,
@@ -200,12 +253,10 @@ export const useFileUpload = (): UseFileUploadReturn => {
 
   // Upload control handlers
   const handleStartUpload = useCallback(() => {
-    // Only upload non-cancelled files
-    const validFiles = files.filter(f => f.status !== 'cancelled');
-    if (validFiles.length === 0) {
+    if (files.length === 0) {
       toast({
         title: 'No Files to Upload',
-        description: 'All files have been cancelled',
+        description: 'Please select files to upload',
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -213,7 +264,7 @@ export const useFileUpload = (): UseFileUploadReturn => {
       return;
     }
     uppy.upload();
-  }, [uppy, files, toast]);
+  }, [uppy, files.length, toast]);
 
   const handlePauseUpload = useCallback(() => {
     uppy.cancelAll();
@@ -223,7 +274,6 @@ export const useFileUpload = (): UseFileUploadReturn => {
   const handleClearAll = useCallback(() => {
     uppy.cancelAll();
     uppy.getFiles().forEach(file => uppy.removeFile(file.id));
-    setFiles([]);
     setIsUploading(false);
     
     const message = 'All files cleared from upload queue';
@@ -239,36 +289,13 @@ export const useFileUpload = (): UseFileUploadReturn => {
   }, [uppy, toast]);
 
   const handleCancelFile = useCallback((fileId: string) => {
-    // Find the file in our local state
-    const fileToCancel = files.find(f => f.id === fileId);
-    if (!fileToCancel) return;
+    const uppyFile = uppy.getFile(fileId);
+    if (!uppyFile) return;
 
-    // If file is currently uploading, cancel it in Uppy
-    if (fileToCancel.status === 'uploading') {
-      const uppyFile = uppy.getFile(fileId);
-      if (uppyFile) {
-        uppy.removeFile(fileId);
-      }
-    }
+    // Remove from Uppy
+    uppy.removeFile(fileId);
 
-    // Update file status to cancelled
-    setFiles(prev => prev.map(f => 
-      f.id === fileId 
-        ? { ...f, status: 'cancelled' as const, progress: 0 }
-        : f
-    ));
-
-    // Remove from Uppy if still in queue
-    try {
-      const uppyFile = uppy.getFile(fileId);
-      if (uppyFile) {
-        uppy.removeFile(fileId);
-      }
-    } catch (error) {
-      // File might not exist in Uppy anymore, which is fine
-    }
-
-    const message = `File "${fileToCancel.name}" cancelled`;
+    const message = `File "${uppyFile.name}" cancelled`;
     announceToScreenReader(message);
 
     toast({
@@ -278,15 +305,18 @@ export const useFileUpload = (): UseFileUploadReturn => {
       duration: 3000,
       isClosable: true,
     });
-  }, [files, uppy, toast]);
+  }, [uppy, toast]);
 
-  // Calculate global progress (excluding cancelled files)
-  const activeFiles = files.filter(f => f.status !== 'cancelled');
-  const globalProgress = activeFiles.length > 0 
-    ? Math.round(activeFiles.reduce((sum, file) => sum + file.progress, 0) / activeFiles.length)
-    : 0;
+  // Calculate global progress and stats
+  const globalProgress = totalProgress || 0;
 
-  const completedFiles = files.filter(f => f.status === 'done').length;
+  const completedFiles = useMemo(() => {
+    return files.filter(f => f.status === 'done').length;
+  }, [files]);
+
+  const activeFiles = useMemo(() => {
+    return files.length;
+  }, [files]);
 
   return {
     files,
@@ -301,6 +331,6 @@ export const useFileUpload = (): UseFileUploadReturn => {
     liveRegionRef,
     globalProgress,
     completedFiles,
-    activeFiles: activeFiles.length,
+    activeFiles,
   };
 }; 
