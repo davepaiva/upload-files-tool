@@ -1,46 +1,128 @@
-# Getting Started with Create React App
+# Bulk File Upload Tool
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A lightweight React + TypeScript web application for bulk-uploading staff documents with drag-and-drop functionality, controlled concurrency, and comprehensive accessibility features.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **Drag & Drop Interface**: Support for folder drag-and-drop with "Choose folder" button fallback
+- **Recursive File Enumeration**: Automatically scans directories up to 2 levels deep
+- **Controlled Concurrency**: Configurable parallel upload limit (default: 3)
+- **Automatic Retry Logic**: Retries failed uploads up to 2 times on HTTP 5xx errors
+- **Progress Tracking**: Individual file progress bars and global batch progress
+- **Pause/Resume**: Full control over upload operations
+- **Accessibility**: WCAG 2.1 AA compliant with keyboard navigation and screen reader support
+- **Responsive Design**: Mobile-first approach supporting screens ≥ 320px wide
 
-### `npm start`
+## Prerequisites
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+- Node.js 16+ and npm
+- Supabase account for file storage
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Environment Setup
 
-### `npm test`
+### 1. Environment Variables
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Create a `.env` file in the root directory with the following variables:
 
-### `npm run build`
+```env
+# Supabase Configuration
+REACT_APP_SUPABASE_URL=https://your-project-id.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
+REACT_APP_SUPABASE_BUCKET_NAME=staff-documents
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+# Upload Configuration (Optional)
+REACT_APP_MAX_CONCURRENT_UPLOADS=3
+REACT_APP_MAX_RETRY_ATTEMPTS=2
+REACT_APP_MAX_FILE_SIZE_MB=50
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 2. Supabase Project Setup
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+#### Step 1: Create a New Supabase Project
 
-### `npm run eject`
+1. Go to [supabase.com](https://supabase.com) and create a new project
+2. Note your Project URL and anon public key from the API settings
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+#### Step 2: Create Storage Bucket
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+1. In your Supabase dashboard, go to **Storage**
+2. Create a new bucket named `staff-documents`
+3. Set the bucket as **Public** if you want uploaded files to be publicly accessible
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+#### Step 3: Configure Bucket Policies
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+In the Supabase dashboard, go to **Storage** → **Policies** and create the following policies:
 
-## Learn More
+**Policy 1: Allow Public Insertions**
+```sql
+CREATE POLICY "Allow public uploads" ON storage.objects
+FOR INSERT
+TO public
+WITH CHECK (bucket_id = 'staff-documents');
+```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Installation & Setup
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Start Development Server
+
+```bash
+npm start
+```
+
+The application will be available at [http://localhost:3000](http://localhost:3000).
+
+### 3. Build for Production
+
+```bash
+npm run build
+```
+
+This creates an optimized production build in the `build` folder.
+
+## Development Scripts
+
+- `npm start` - Runs the app in development mode
+- `npm test` - Launches the test runner
+- `npm run build` - Builds the app for production
+
+## Project Structure
+
+```
+src/
+├── components/          # Main application components
+├── design-system/       # Reusable UI components
+│   ├── atoms/          # Basic UI elements
+│   ├── molecules/      # Composite UI components
+│   └── organisms/      # Complex UI components
+├── hooks/              # Custom React hooks
+└── utils/              # Utility functions
+```
+
+## File Upload Flow
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
