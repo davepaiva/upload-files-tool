@@ -1,0 +1,167 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Bulk File Upload Tool - Take Home Assignment Rules
+
+## Project Overview
+Building a lightweight React + TypeScript web tool for bulk-uploading staff documents with drag-and-drop functionality, controlled concurrency, and comprehensive accessibility features.
+
+## Core Requirements
+
+### 1. File Selection & Listing
+- Build React + TypeScript component with drag-and-drop folder support
+- Include "Choose folder" button as fallback
+- Recursively enumerate files (ignore sub-directories deeper than level 2)
+- Render table with columns: Relative Path, Size (KB/MB), Status (Queued/Uploading/Done/Error)
+
+### 2. Tagging Logic
+- Before upload, append form fields: `originalFilename`, `rootDirectory` (top-level folder name)
+
+### 3. Controlled Concurrency
+- Upload to mock endpoint
+- Limit parallel uploads to 3 (configurable)
+- Automatically retry up to 2 times on HTTP 5xx errors
+- Show progress bar for each file
+
+### 4. UX & Accessibility
+- Global progress bar for batch operations
+- Pause/resume all uploads functionality
+- Responsive layout for screens ≥ 320px wide
+- Fully keyboard-accessible
+- ARIA live region for status announcements
+
+### 5. Quality Gates
+- Lighthouse ≥ 90 on Performance and Accessibility
+- ESLint & Prettier must pass
+- No major aXe accessibility violations
+
+## Technical Guidelines
+
+### TypeScript Standards
+- Use strict TypeScript configuration
+- Define interfaces for all props and state
+- Avoid `any` types - use proper typing
+- Create type definitions for file upload states, progress, and API responses
+
+### React Best Practices
+- Use functional components with hooks
+- Implement custom hooks for upload queue management
+- Memoize expensive operations (useMemo, useCallback)
+- Use proper dependency arrays in useEffect
+- Implement error boundaries for robust error handling
+
+### Performance Optimization
+- Lazy render large file lists (virtualization if needed)
+- Memoize file list components
+- Debounce UI updates during upload progress
+- Use React.memo for pure components
+- Implement efficient re-rendering strategies
+
+### Accessibility Requirements
+- ARIA live regions for status announcements
+- Keyboard navigation for all interactive elements
+- Proper focus management
+- Screen reader friendly labels and descriptions
+- High contrast ratios
+- Touch target sizes ≥ 44px
+
+### File Upload Implementation
+- Use FormData for file uploads
+- Implement proper error handling for network failures
+- Create retry mechanism for HTTP 5xx errors
+- Support pause/resume functionality
+- Track upload progress accurately
+
+### State Management
+- Use reducer pattern for complex upload state
+- Implement proper loading states
+- Handle concurrent operations safely
+- Maintain upload queue state consistently
+
+## Required Files Structure
+```
+root/
+├── src/
+├── .github/workflows/ci.yml
+├── lighthouseci.config.js
+├── DESIGN.md
+├── AUTHENTICITY.md
+└── README.md
+```
+
+## Code Quality Standards
+- Follow consistent naming conventions
+- Write self-documenting code
+- Add JSDoc comments for complex functions
+- Keep components small and focused
+- Use proper separation of concerns
+- Implement proper error boundaries
+
+## Testing Requirements
+- Unit tests for upload queue logic
+- Integration tests for file upload flow
+- Accessibility testing with screen readers
+- Performance testing for large file sets
+- Edge case testing (network failures, large files)
+
+## Performance Considerations
+- Implement virtual scrolling for large file lists
+- Use Web Workers for heavy computations if needed
+- Optimize bundle size with code splitting
+- Implement proper caching strategies
+- Monitor memory usage during uploads
+
+## Deployment & CI/CD
+- GitHub Actions workflow for CI/CD
+- Lighthouse CI configuration
+- Automated accessibility testing
+- ESLint and Prettier checks
+- Build optimization
+
+## Documentation Requirements
+- DESIGN.md (≤ 500 words) explaining:
+  - Queue implementation approach
+  - Performance optimizations
+  - Future network-drop handling
+  - Grafana metrics strategy
+- AUTHENTICITY.md (self-attestation)
+- README.md with clear run & build steps
+
+## Error Handling Strategy
+- Graceful degradation for unsupported browsers
+- Comprehensive error messages
+- Retry logic with exponential backoff
+- User-friendly error states
+- Console error tracking and elimination
+
+## Mobile & Responsive Design
+- Mobile-first approach
+- Touch-friendly drag-and-drop
+- Responsive breakpoints
+- Optimized for screens ≥ 320px
+- Fast loading on mobile networks
+
+## Security Considerations
+- Client-side file validation
+- Proper MIME type checking
+- File size limitations
+- Secure upload endpoints
+- XSS prevention measures
+
+## Development Workflow
+- Start with core file selection functionality
+- Implement upload queue management
+- Add accessibility features throughout
+- Optimize performance continuously
+- Test across different devices and browsers
+- Document design decisions in DESIGN.md
+
+## Success Metrics
+- Zero console errors
+- Lighthouse scores ≥ 90
+- Full keyboard accessibility
+- Smooth drag-and-drop experience
+- Clear user feedback at all stages
+- Proper error recovery 
