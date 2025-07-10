@@ -29,11 +29,6 @@ Create a `.env` file in the root directory with the following variables:
 REACT_APP_SUPABASE_URL=https://your-project-id.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=your-anon-key
 REACT_APP_SUPABASE_BUCKET_NAME=staff-documents
-
-# Upload Configuration (Optional)
-REACT_APP_MAX_CONCURRENT_UPLOADS=3
-REACT_APP_MAX_RETRY_ATTEMPTS=2
-REACT_APP_MAX_FILE_SIZE_MB=50
 ```
 
 ### 2. Supabase Project Setup
