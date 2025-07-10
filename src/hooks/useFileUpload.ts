@@ -68,7 +68,7 @@ export const useFileUpload = (): UseFileUploadReturn => {
       },
       uploadDataDuringCreation: true,
       chunkSize: 6 * 1024 * 1024, // 6MB chunks for better performance
-      allowedMetaFields: ['bucketName', 'objectName', 'contentType', 'cacheControl'],
+      allowedMetaFields: ['bucketName', 'objectName', 'contentType', 'cacheControl', 'originalFilename', 'rootDirectory'],
       limit: 3, // Max 3 concurrent uploads
       retryDelays: [0, 1000], // Retry delays for failed uploads
       onError: function (error) {
@@ -112,11 +112,14 @@ export const useFileUpload = (): UseFileUploadReturn => {
   // Set up Uppy event listeners
   useEffect(() => {
     const onFileAdded = (file: UppyFile<{ type: string; }, Record<string, never>>) => {
-      // Set Supabase metadata for the file
-      const relativePath = (file.meta as any)?.relativePath || file.name;
-      const rootDirectory = (file.meta as any)?.rootDirectory || '';
+      // Get existing metadata
+      const existingMeta = file.meta as any;
+      const relativePath = existingMeta?.relativePath || file.name;
+      const rootDirectory = existingMeta?.rootDirectory || '';
+      const originalFilename = existingMeta?.originalFilename || file.name;
       const objectName = rootDirectory ? `${rootDirectory}/${relativePath}` : relativePath;
       
+      // Preserve existing metadata and add Supabase-specific fields
       const supabaseMetadata = {
         bucketName: process.env.REACT_APP_SUPABASE_STORAGE_BUCKET,
         objectName: objectName,
@@ -125,8 +128,10 @@ export const useFileUpload = (): UseFileUploadReturn => {
       };
 
       file.meta = {
-        ...file.meta,
+        ...existingMeta,
         ...supabaseMetadata,
+        originalFilename,
+        rootDirectory,
       };
 
       console.log('File added with metadata:', file);
