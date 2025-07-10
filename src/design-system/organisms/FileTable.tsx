@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Box, 
-  Table, 
-  Thead, 
-  Tbody, 
-  Tr, 
-  Th, 
-  TableContainer, 
-  useColorModeValue 
+  Grid, 
+  useColorModeValue,
+  HStack,
+  IconButton
 } from '@chakra-ui/react';
-import { FileRow, FileRowProps } from '../molecules';
-import { Text } from '../atoms';
+import { FixedSizeList as List } from 'react-window';
+import { FileRowProps } from '../molecules';
+import { Text, Progress, Badge } from '../atoms';
+import { CloseIcon } from '@chakra-ui/icons';
+import { formatFileSize, capitalize } from '../../utils/formatters';
 
 export interface FileTableProps {
   files: FileRowProps[];
@@ -19,6 +19,131 @@ export interface FileTableProps {
   emptyMessage?: string;
 }
 
+// Row height in pixels
+const ROW_HEIGHT = 60;
+
+interface VirtualizedRowProps {
+  index: number;
+  style: React.CSSProperties;
+  data: {
+    files: FileRowProps[];
+    onFileRowClick?: (id: string) => void;
+    onCancelFile?: (id: string) => void;
+  };
+}
+
+const VirtualizedRow: React.FC<VirtualizedRowProps> = ({ index, style, data }) => {
+  const { files, onFileRowClick, onCancelFile } = data;
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const file = files[index];
+  
+  if (!file) return null;
+
+  const handleRowClick = () => {
+    if (onFileRowClick) {
+      onFileRowClick(file.id);
+    }
+  };
+
+  const handleCancel = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onCancelFile) {
+      onCancelFile(file.id);
+    }
+  };
+
+  const canCancel = file.status === 'queued' || file.status === 'uploading';
+
+  return (
+    <div style={style}>
+      <Grid
+        templateColumns="2fr 1fr 1fr 2fr 80px"
+        gap={4}
+        p={3}
+        _hover={{ bg: hoverBg }}
+        cursor={onFileRowClick ? 'pointer' : 'default'}
+        onClick={handleRowClick}
+        tabIndex={onFileRowClick ? 0 : undefined}
+        role={onFileRowClick ? 'button' : 'row'}
+        aria-label={onFileRowClick ? `File: ${file.name}` : undefined}
+        onKeyDown={(e) => {
+          if (onFileRowClick && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handleRowClick();
+          }
+        }}
+        borderBottom="1px"
+        borderColor={borderColor}
+        alignItems="center"
+      >
+        {/* Relative Path */}
+        <Box>
+          <Text
+            isTruncated
+            title={file.relativePath}
+            variant="body"
+            size="sm"
+          >
+            {file.relativePath}
+          </Text>
+        </Box>
+        
+        {/* Size */}
+        <Box>
+          <Text variant="body" size="sm">
+            {formatFileSize(file.size)}
+          </Text>
+        </Box>
+        
+        {/* Status */}
+        <Box>
+          <Badge status={file.status}>
+            {capitalize(file.status)}
+          </Badge>
+          {file.error && (
+            <Text variant="caption" color="error" fontSize="xs" mt={1}>
+              {file.error}
+            </Text>
+          )}
+        </Box>
+        
+        {/* Progress */}
+        <Box>
+          <HStack spacing={3}>
+            <Progress 
+              value={file.progress}
+              variant={file.status === 'error' ? 'error' : 'primary'}
+              size="sm"
+              flex={1}
+            />
+            <Text variant="caption" color="secondary" size="sm" minW="40px">
+              {file.progress}%
+            </Text>
+          </HStack>
+        </Box>
+        
+        {/* Actions */}
+        <Box>
+          {canCancel && (
+            <IconButton
+              aria-label={`Cancel upload of ${file.name}`}
+              icon={<CloseIcon />}
+              size="sm"
+              colorScheme="red"
+              variant="ghost"
+              onClick={handleCancel}
+              minW="unset"
+              h={6}
+              w={6}
+            />
+          )}
+        </Box>
+      </Grid>
+    </div>
+  );
+};
+
 const FileTable: React.FC<FileTableProps> = ({
   files,
   onFileRowClick,
@@ -26,6 +151,19 @@ const FileTable: React.FC<FileTableProps> = ({
   emptyMessage = 'No files selected',
 }) => {
   const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const headerBg = useColorModeValue('gray.50', 'gray.700');
+
+  const itemData = useMemo(() => ({
+    files,
+    onFileRowClick,
+    onCancelFile,
+  }), [files, onFileRowClick, onCancelFile]);
+
+  // Calculate total height needed for all rows
+  const totalHeight = useMemo(() => {
+    return files.length * ROW_HEIGHT;
+  }, [files.length]);
 
   if (files.length === 0) {
     return (
@@ -54,49 +192,59 @@ const FileTable: React.FC<FileTableProps> = ({
       role="table"
       aria-label="File upload status table"
     >
-      <TableContainer>
-        <Table variant="simple" size="md">
-          <Thead>
-            <Tr>
-              <Th>
-                <Text variant="label" size="sm">
-                  Relative Path
-                </Text>
-              </Th>
-              <Th>
-                <Text variant="label" size="sm">
-                  Size
-                </Text>
-              </Th>
-              <Th>
-                <Text variant="label" size="sm">
-                  Status
-                </Text>
-              </Th>
-              <Th>
-                <Text variant="label" size="sm">
-                  Progress
-                </Text>
-              </Th>
-              <Th>
-                <Text variant="label" size="sm">
-                  Actions
-                </Text>
-              </Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {files.map((file) => (
-              <FileRow
-                key={file.id}
-                {...file}
-                onRowClick={onFileRowClick}
-                onCancel={onCancelFile}
-              />
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
+      {/* Table Header */}
+      <Grid
+        templateColumns="2fr 1fr 1fr 2fr 80px"
+        gap={4}
+        p={3}
+        bg={headerBg}
+        borderBottom="2px"
+        borderColor={borderColor}
+        fontWeight="semibold"
+      >
+        <Box>
+          <Text variant="label" size="sm">
+            Relative Path
+          </Text>
+        </Box>
+        <Box>
+          <Text variant="label" size="sm">
+            Size
+          </Text>
+        </Box>
+        <Box>
+          <Text variant="label" size="sm">
+            Status
+          </Text>
+        </Box>
+        <Box>
+          <Text variant="label" size="sm">
+            Progress
+          </Text>
+        </Box>
+        <Box>
+          <Text variant="label" size="sm">
+            Actions
+          </Text>
+        </Box>
+      </Grid>
+
+      {/* Virtualized List Container - No fixed height, grows with content */}
+      <Box 
+        role="rowgroup"
+        aria-label={`${files.length} files`}
+      >
+        <List
+          height={totalHeight}
+          itemCount={files.length}
+          itemSize={ROW_HEIGHT}
+          itemData={itemData}
+          width="100%"
+          overscanCount={5}
+        >
+          {VirtualizedRow}
+        </List>
+      </Box>
     </Box>
   );
 };
