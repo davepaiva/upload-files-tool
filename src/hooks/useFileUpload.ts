@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useToast } from '@chakra-ui/react';
 import Uppy, { UppyFile, UploadResult } from '@uppy/core';
 import Tus from '@uppy/tus';
 import { useUppyState } from '@uppy/react';
@@ -29,9 +28,15 @@ export interface FileUploadItem {
   error?: string;
 }
 
+export interface UseFileUploadConfig {
+  maxConcurrentUploads?: number;
+}
+
 export interface UseFileUploadReturn {
   files: FileUploadItem[];
   isUploading: boolean;
+  maxConcurrentUploads: number;
+  setMaxConcurrentUploads: (limit: number) => void;
   handleFolderSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handleFileSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handleDrop: (event: React.DragEvent) => void;
@@ -45,12 +50,12 @@ export interface UseFileUploadReturn {
   activeFiles: number;
 }
 
-export const useFileUpload = (): UseFileUploadReturn => {
+export const useFileUpload = (config: UseFileUploadConfig = {}): UseFileUploadReturn => {
   const [isUploading, setIsUploading] = useState(false);
+  const [maxConcurrentUploads, setMaxConcurrentUploads] = useState(config.maxConcurrentUploads || 3);
   const liveRegionRef = useRef<HTMLDivElement>(null);
-  const toast = useToast();
 
-  // Initialize Uppy instance
+  // Initialize Uppy instance with configurable concurrency
   const [uppy] = useState(() => 
     new Uppy({
       meta: { type: 'bulk-upload' },
@@ -60,7 +65,17 @@ export const useFileUpload = (): UseFileUploadReturn => {
       },
       autoProceed: false,
     })
-    .use(Tus, {
+  );
+
+  // Update Uppy plugin configuration when concurrency changes
+  useEffect(() => {
+    // Remove existing Tus plugin if it exists
+    if (uppy.getPlugin('Tus')) {
+      uppy.removePlugin(uppy.getPlugin('Tus')!);
+    }
+
+    // Add Tus plugin with new configuration
+    uppy.use(Tus, {
       endpoint: supabaseStorageURL,
       headers: {
         authorization: `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
@@ -69,13 +84,28 @@ export const useFileUpload = (): UseFileUploadReturn => {
       uploadDataDuringCreation: true,
       chunkSize: 6 * 1024 * 1024, // 6MB chunks for better performance
       allowedMetaFields: ['bucketName', 'objectName', 'contentType', 'cacheControl', 'originalFilename', 'rootDirectory'],
-      limit: 3, // Max 3 concurrent uploads
+      limit: maxConcurrentUploads,
       retryDelays: [0, 1000], // Retry delays for failed uploads
       onError: function (error) {
         console.error('Upload failed:', error);
       },
-    })
-  );
+    });
+
+    return () => {
+      if (uppy.getPlugin('Tus')) {
+        uppy.removePlugin(uppy.getPlugin('Tus')!);
+      }
+    };
+  }, [maxConcurrentUploads, uppy]);
+
+  // Handle concurrency limit changes
+  const handleSetMaxConcurrentUploads = useCallback((limit: number) => {
+    if (limit < 1 || limit > 10) {
+      return;
+    }
+    
+    setMaxConcurrentUploads(limit);
+  }, []);
 
   // Use Uppy's state directly
   const uppyFiles = useUppyState(uppy, (state) => state.files);
@@ -83,6 +113,8 @@ export const useFileUpload = (): UseFileUploadReturn => {
 
   // Convert Uppy files to FileUploadItem format
   const files = useMemo(() => {
+    if (!uppyFiles) return [];
+    
     return Object.values(uppyFiles).map((uppyFile): FileUploadItem => {
       const meta = uppyFile.meta as any;
       const relativePath = meta?.relativePath || uppyFile.name;
@@ -217,15 +249,7 @@ export const useFileUpload = (): UseFileUploadReturn => {
     // Announce to screen readers
     const message = `${validFiles.length} file${validFiles.length !== 1 ? 's' : ''} added to upload queue`;
     announceToScreenReader(message);
-
-    toast({
-      title: 'Files Added',
-      description: message,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-  }, [uppy, toast]);
+  }, [uppy]);
 
   // Handle folder selection
   const handleFolderSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -259,17 +283,10 @@ export const useFileUpload = (): UseFileUploadReturn => {
   // Upload control handlers
   const handleStartUpload = useCallback(() => {
     if (files.length === 0) {
-      toast({
-        title: 'No Files to Upload',
-        description: 'Please select files to upload',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
       return;
     }
     uppy.upload();
-  }, [uppy, files.length, toast]);
+  }, [uppy, files.length]);
 
   const handlePauseUpload = useCallback(() => {
     uppy.cancelAll();
@@ -283,15 +300,7 @@ export const useFileUpload = (): UseFileUploadReturn => {
     
     const message = 'All files cleared from upload queue';
     announceToScreenReader(message);
-
-    toast({
-      title: 'Queue Cleared',
-      description: message,
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    });
-  }, [uppy, toast]);
+  }, [uppy]);
 
   const handleCancelFile = useCallback((fileId: string) => {
     const uppyFile = uppy.getFile(fileId);
@@ -302,15 +311,7 @@ export const useFileUpload = (): UseFileUploadReturn => {
 
     const message = `File "${uppyFile.name}" cancelled`;
     announceToScreenReader(message);
-
-    toast({
-      title: 'File Cancelled',
-      description: message,
-      status: 'warning',
-      duration: 3000,
-      isClosable: true,
-    });
-  }, [uppy, toast]);
+  }, [uppy]);
 
   // Calculate global progress and stats
   const globalProgress = totalProgress || 0;
@@ -326,6 +327,8 @@ export const useFileUpload = (): UseFileUploadReturn => {
   return {
     files,
     isUploading,
+    maxConcurrentUploads,
+    setMaxConcurrentUploads: handleSetMaxConcurrentUploads,
     handleFolderSelect,
     handleFileSelect,
     handleDrop,

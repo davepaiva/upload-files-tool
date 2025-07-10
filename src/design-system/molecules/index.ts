@@ -1,7 +1,8 @@
-export { default as FileRow } from './FileRow';
-export { default as UploadZone } from './UploadZone';
-export { default as ProgressBar } from './ProgressBar';
 export { default as ControlButtons } from './ControlButtons';
+export { default as FileRow } from './FileRow';
+export { default as ProgressBar } from './ProgressBar';
+export { default as UploadZone } from './UploadZone';
+export { default as ConcurrencySettings } from './ConcurrencySettings';
 
 export type { FileRowProps } from './FileRow';
 export type { UploadZoneProps } from './UploadZone';
