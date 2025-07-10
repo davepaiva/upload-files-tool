@@ -8,7 +8,7 @@
 
 ## Queue Implementation
 
-The upload queue is implemented using Uppy.js with a custom React hook (`useFileUpload`) that manages:
+The upload queue is implemented using Uppy.js based on the Tus protocol (came across TUS when I was looking for a fast way to upload files to a server - https://github.com/supabase/supabase/blob/master/apps/docs/content/guides/storage/uploads/resumable-uploads.mdx) with a custom React hook (`useFileUpload`) that manages:
 - File selection and validation (max 2 directory levels deep)
 - Configurable concurrency limits (1-10 concurrent uploads)
 - Automatic retry logic for HTTP 5xx errors (max 2 retries)
